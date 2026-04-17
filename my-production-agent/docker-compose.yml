@@ -1,0 +1,88 @@
+# ============================================================
+# Production Stack — Agent × 3 + Redis + Nginx Load Balancer
+#
+# Run:
+#   docker compose up --scale agent=3
+#
+# Test:
+#   curl http://localhost/health
+#   curl http://localhost/ask -X POST \
+#     -H "X-API-Key: dev-key-change-me" \
+#     -H "Content-Type: application/json" \
+#     -d '{"question": "What is Docker?"}'
+#
+# Check load balancing — inspect the "served_by" field in responses,
+# it should cycle across different instance IDs.
+# ============================================================
+
+
+services:
+
+  # ── AI Agent (scalable) ─────────────────────────────────────────────────────
+  agent:
+    build:
+      context: .           # project root (contains app/ and utils/)
+      dockerfile: app/Dockerfile
+    environment:
+      - ENVIRONMENT=staging
+      - PORT=8000
+      - REDIS_URL=redis://redis:6379/0
+      - RATE_LIMIT_PER_MINUTE=10
+      - MONTHLY_BUDGET_USD=10.0
+      - LOG_LEVEL=INFO
+    env_file:
+      - .env.local          # optional — gitignored file for secrets
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - agent_net
+    # Agents are NOT exposed directly — all traffic goes through nginx.
+    # Use --scale agent=3 at runtime or set replicas here for docker stack.
+
+  # ── Redis ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    # Limit memory and evict least-recently-used keys when full.
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - agent_net
+    # Optional: persist data across restarts (uncomment for production).
+    # volumes:
+    #   - redis_data:/data
+
+  # ── Nginx — Load Balancer ───────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"             # public entry point
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - agent
+    networks:
+      - agent_net
+    restart: unless-stopped
+
+networks:
+  agent_net:
+    driver: bridge
+
+# volumes:
+#   redis_data:
