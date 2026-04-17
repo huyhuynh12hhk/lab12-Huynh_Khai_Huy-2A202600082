@@ -1,0 +1,60 @@
+name: Deploy to Railway
+
+# ── Triggers ────────────────────────────────────────────────────────────────
+on:
+  push:
+    branches:
+      - main
+    paths:
+      # Only run when files inside my-production-agent/ change.
+      # This avoids re-deploying when only docs or other labs change.
+      - "my-production-agent/**"
+
+  # Allow manual trigger from the GitHub Actions UI.
+  workflow_dispatch:
+
+# ── Jobs ────────────────────────────────────────────────────────────────────
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+
+    # Prevent concurrent deploys (e.g. two pushes in quick succession).
+    concurrency:
+      group: railway-deploy
+      cancel-in-progress: true
+
+    steps:
+      # 1. Checkout full repo so the working-directory resolves correctly.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Install Railway CLI (same version you used locally).
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      # 3. Deploy.
+      #    - working-directory points Railway at the subdirectory so it picks
+      #      up my-production-agent/railway.toml and app/Dockerfile correctly.
+      #    - RAILWAY_TOKEN must be added as a secret in:
+      #        GitHub repo → Settings → Secrets → Actions → New repository secret
+      #        Name:  RAILWAY_TOKEN
+      #        Value: <token from Railway dashboard → Account → Tokens>
+      #
+      #    Optional: if you have multiple Railway services, also add:
+      #        RAILWAY_SERVICE  (the service name, e.g. "agent")
+      - name: Deploy to Railway
+        working-directory: my-production-agent
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway up --detach
+
+      # 4. Print the public URL for traceability in the Actions log.
+      - name: Show deployment URL
+        working-directory: my-production-agent
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          echo "Deployment triggered. Run 'railway domain' locally to get the public URL."
+          railway status || true

@@ -1,0 +1,14 @@
+[build]
+# Railway builds from the my-production-agent/ directory (set as root
+# in the Railway project settings, or via `railway up` run from that dir).
+builder         = "dockerfile"
+dockerfilePath  = "app/Dockerfile"
+
+[deploy]
+# Single-worker start command for Railway (no nginx layer in cloud deploy).
+startCommand        = "sh -c 'uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2'"
+healthcheckPath     = "/health"
+healthcheckTimeout  = 120
+restartPolicyType   = "on_failure"
+restartPolicyMaxRetries = 3
+

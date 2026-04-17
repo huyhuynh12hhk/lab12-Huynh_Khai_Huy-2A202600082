@@ -1,0 +1,34 @@
+# Python byte-compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets — NEVER bake these into the image
+.env
+.env.local
+.env.*.local
+*.key
+
+# Development / test artefacts
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+
+# Editor metadata
+.vscode/
+.idea/
+*.swp
+
+# Docker build context noise
+.git/
+.gitignore
+README.md
